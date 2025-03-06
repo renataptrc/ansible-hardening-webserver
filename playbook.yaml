@@ -1,0 +1,71 @@
+- name: My first play
+  hosts: myhosts
+  tasks:
+    - name: Ping my hosts
+      ansible.builtin.ping:
+
+    - name: Print message
+      debug:
+        msg: Hello World
+
+- name: Hardening Linux Server
+  hosts: myhosts
+  become: yes
+  tasks:
+
+  #Update dan patch
+  - name: Update and upgrade packages
+    apt:
+      update_cache: yes #seperti apt get update
+      upgrade: dist #termasuk update versi (riskan)
+    when: ansible_os_family == "Debian"
+
+  #Pengaturan Akses SSH
+  - name: Disable root login and password authentication
+    lineinfile:
+      path: /etc/ssh/sshd_config
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+      state: present
+    loop:
+      - { regexp: '^PermitRootLogin', line: 'PermitRootLogin no'}
+      - { regexp: '^PasswordAuthentication', line: 'PasswordAuthentication no'}
+    notify: Restart SSH
+  
+  #Firewall
+  - name: Allow SSH and HTTP/S
+    ufw:
+      rule: allow
+      port: "{{ item }}"
+      proto: tcp
+    loop:
+      - 22
+      - 2222
+      - 80
+      - 443
+  - name: Enable UFW
+    ufw:
+      state: enabled  
+  
+  #Audit Log
+  - name: Install auditd
+    apt:
+      name: auditd
+      state: present
+    when: ansible_os_family == "Debian"
+
+  #Pengaturan File
+  - name: Set permissions for sensitive files
+    file:
+      path: "{{ item.path }}"
+      mode: "{{ item.mode }}"
+    loop:
+      - { path: '/etc/shadow', mode: '0600'}
+      - { path: '/etc/passwd', mode: '0644'}
+
+
+  handlers:
+  - name: Restart SSH
+    service:
+      name: ssh
+      state: restarted

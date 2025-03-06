@@ -1,0 +1,341 @@
+---
+  - name: Harden Web Server
+    hosts: myhosts
+    become: yes
+    tasks:
+  
+      # 1.1 Filesystem Hardening
+      - name: Ensure /tmp is mounted with nodev, nosuid, noexec
+        ansible.posix.mount:
+          path: /tmp
+          src: tmpfs
+          fstype: tmpfs
+          opts: defaults,nodev,nosuid,noexec
+          state: mounted
+        when: ansible_mounts | selectattr('mount', 'equalto', '/tmp') | list | length == 0
+  
+      - name: Ensure /dev/shm is mounted with nodev, nosuid, noexec
+        ansible.posix.mount:
+          path: /dev/shm
+          src: tmpfs
+          fstype: tmpfs
+          opts: nodev,nosuid,noexec
+          state: mounted
+        when: ansible_mounts | selectattr('mount', 'equalto', '/dev/shm') | list | length == 0
+  
+      - name: Ensure /var/tmp is mounted with nodev, nosuid, noexec
+        ansible.posix.mount:
+          path: /var/tmp
+          src: tmpfs
+          fstype: tmpfs
+          opts: nodev,nosuid,noexec,noauto
+          state: mounted
+        when: ansible_mounts | selectattr('mount', 'equalto', '/var/tmp') | list | length == 0
+<<<<<<< HEAD
+  
+=======
+        # Perbaikan: Konfigurasi PHP session agar tidak menggunakan /tmp
+      - name: Create PHP session directory
+        file:
+          path: /var/lib/php/session
+          state: directory
+          owner: apache
+          group: apache
+          mode: '1733'
+
+      - name: Ensure PHP session path is set correctly
+        lineinfile:
+          path: /etc/php.ini
+          regexp: '^session.save_path'
+          line: 'session.save_path = "/var/lib/php/session"'
+        notify: Restart PHP-FPM
+
+>>>>>>> 61188f6 (Update files)
+      # 1.2 Package Management
+      - name: Check if gpgcheck is already enabled
+        command: grep -q '^gpgcheck=1' /etc/dnf.conf
+        register: gpgcheck_status
+        failed_when: false
+        changed_when: false
+  
+      - name: Ensure gpgcheck is enabled for all repositories
+        lineinfile:
+          path: /etc/dnf.conf
+          line: "gpgcheck=1"
+        when: gpgcheck_status.rc != 0
+  
+      - name: Ensure system is updated
+        dnf:
+          name: '*'
+          state: latest
+          releasever: '9'
+  
+      # 1.3 Mandatory Access Control (SELinux)
+      - name: Get SELinux status
+        command: getenforce
+        register: selinux_status
+        changed_when: false
+  
+      - name: Ensure SELinux is enforcing
+        lineinfile:
+          path: /etc/selinux/config
+          regexp: '^SELINUX='
+          line: 'SELINUX=enforcing'
+        when: ansible_facts['selinux']['status'] != "enforcing"
+<<<<<<< HEAD
+
+      # 1.5 Process Hardening
+=======
+        
+      # 1.3 SELinux - Allow Webmin Uploads
+      - name: Allow Webmin to access upload directory
+        command: semanage fcontext -a -t httpd_sys_rw_content_t "/usr/libexec/webmin(/.*)?"
+        changed_when: false
+
+      - name: Apply SELinux context for Webmin uploads
+        command: restorecon -Rv /usr/libexec/webmin
+        changed_when: false
+
+      # 1.3 SELinux - Allow Database Access
+      - name: Allow MySQL/MariaDB to access database directory
+        command: semanage fcontext -a -t mysqld_db_t "/var/lib/mysql(/.*)?"
+        changed_when: false
+
+      - name: Apply SELinux context for database directory
+        command: restorecon -Rv /var/lib/mysql
+        changed_when: false
+
+      # 1.5 Configure Process Hardening
+      - name: Check if WebSockets or real-time applications are used
+        shell: "ps aux | grep -E 'node|socket.io|websockets|websocketd' | grep -v grep"
+        register: websockets_check
+        ignore_errors: true
+        changed_when: false
+
+>>>>>>> 61188f6 (Update files)
+      - name: Configure sysctl settings for security
+        blockinfile:
+          path: /etc/sysctl.conf
+          block: |
+            kernel.randomize_va_space = 2
+            kernel.yama.ptrace_scope = 1
+<<<<<<< HEAD
+            net.ipv4.ip_forward = 0
+            net.ipv4.conf.all.accept_redirects = 0
+            net.ipv4.tcp_syncookies = 1
+        notify: Reload sysctl
+  
+      # 2. Services Hardening
+      - name: Gather service facts
+        ansible.builtin.service_facts:
+  
+      - name: Disable unnecessary web services (Apache)
+=======
+            net.ipv4.conf.all.accept_redirects = 0
+            net.ipv4.tcp_syncookies = 1
+        notify: Reload sysctl
+
+      - name: Disable IP forwarding only if WebSockets are NOT detected
+        lineinfile:
+          path: /etc/sysctl.conf
+          line: "net.ipv4.ip_forward = 0"
+        when: websockets_check.rc != 0  # Hanya nonaktifkan jika WebSockets tidak ditemukan
+
+      - name: Apply sysctl settings
+        command: sysctl --system
+        changed_when: false
+  
+      # 2. Configure Services
+      - name: Gather service facts
+        ansible.builtin.service_facts:
+  
+      - name: Check if Webmin is installed
+        command: systemctl is-active webmin
+        register: webmin_status
+        ignore_errors: true
+        changed_when: false
+
+      - name: Disable Apache (httpd) if Webmin is NOT running
+>>>>>>> 61188f6 (Update files)
+        ansible.builtin.systemd:
+          name: httpd
+          state: stopped
+          enabled: no
+<<<<<<< HEAD
+        when: "'httpd' in ansible_facts.services"
+=======
+        when: webmin_status.rc != 0  # Matikan Apache hanya jika Webmin tidak aktif
+
+      - name: Limit Apache access with firewall (nftables)
+        ansible.builtin.command:
+          cmd: |
+            nft add rule inet filter input ip saddr { 192.168.1.100, 192.168.1.101 } tcp dport 80 accept
+            nft add rule inet filter input ip saddr 0.0.0.0/0 tcp dport 80 drop
+        when: webmin_status.rc == 0  # Terapkan firewall jika Webmin aktif
+>>>>>>> 61188f6 (Update files)
+  
+      - name: Ensure Postfix is installed
+        ansible.builtin.package:
+          name: postfix
+          state: present
+  
+      - name: Check if Postfix is already configured for local-only
+        command: grep -q '^inet_interfaces = loopback-only' /etc/postfix/main.cf
+        register: postfix_configured
+        failed_when: false
+        changed_when: false
+<<<<<<< HEAD
+=======
+    
+      - name: Configure Postfix for SMTP relay
+        blockinfile:
+          path: /etc/postfix/main.cf
+          block: |
+            # Hanya menerima email dari localhost
+            inet_interfaces = loopback-only
+            mydestination = localhost
+            # Izinkan relay melalui SMTP eksternal
+            relayhost = [smtp.gmail.com]:587
+            smtp_sasl_auth_enable = yes
+            smtp_sasl_security_options = noanonymous
+            smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+            smtp_use_tls = yes
+        when: postfix_configured.rc != 0
+        notify: Restart Postfix
+        
+      - name: Create SASL password file for SMTP relay
+        copy:
+          dest: /etc/postfix/sasl_passwd
+          content: |
+            [smtp.gmail.com]:587 your-email@gmail.com:your-email-password
+          mode: '0600'
+        notify: Restart Postfix
+
+      - name: Hash the SASL password file
+        command: postmap /etc/postfix/sasl_passwd
+        notify: Restart Postfix
+>>>>>>> 61188f6 (Update files)
+  
+      - name: Configure MTA for local-only mode
+        ansible.builtin.lineinfile:
+          path: /etc/postfix/main.cf
+          line: "inet_interfaces = loopback-only"
+        when: postfix_configured.rc != 0
+  
+      # 4. Firewall Configuration
+      - name: Install and configure nftables
+        dnf:
+          name: nftables
+          state: present
+  
+      - name: Enable and start nftables
+        service:
+          name: nftables
+          state: started
+          enabled: yes
+<<<<<<< HEAD
+  
+      # 5. SSH Hardening
+=======
+          
+      - name: Allow outgoing SMTP traffic
+        ansible.builtin.command:
+          cmd: |
+            nft add rule inet filter output ip daddr { 64.233.160.0/19, 66.102.0.0/20, 74.125.0.0/16 } tcp dport 587 accept
+        when: postfix_configured.rc != 0
+        
+      - name: Ensure nftables allows Webmin and Database ports
+        blockinfile:
+          path: /etc/nftables.conf
+          block: |
+            table inet filter {
+              chain input {
+                type filter hook input priority 0; policy drop;
+                
+                # Allow existing connections
+                ct state established,related accept
+                
+                # Allow SSH
+                tcp dport 22 accept
+                
+                # Allow HTTP/HTTPS
+                tcp dport { 80, 443 } accept
+
+                # Allow Webmin
+                tcp dport 10000 accept
+
+                # Allow MySQL/MariaDB
+                tcp dport 3306 accept
+
+                # Allow PostgreSQL
+                tcp dport 5432 accept
+                
+                # Drop everything else
+                counter drop
+              }
+            }
+        notify: Restart nftables
+  
+      # 5. Configure SSH
+>>>>>>> 61188f6 (Update files)
+      - name: Check if SSH is already configured
+        command: grep -q '^PermitRootLogin no' /etc/ssh/sshd_config
+        register: ssh_configured
+        failed_when: false
+        changed_when: false
+  
+<<<<<<< HEAD
+      - name: Configure SSH security settings
+=======
+      - name: Ensure SSH security settings
+>>>>>>> 61188f6 (Update files)
+        blockinfile:
+          path: /etc/ssh/sshd_config
+          block: |
+            PermitRootLogin no
+<<<<<<< HEAD
+            ClientAliveInterval 300
+            ClientAliveCountMax 0
+        when: ssh_configured.rc != 0
+        notify: Restart sshd
+=======
+            PasswordAuthentication yes
+            AllowUsers student1 student2 student3
+            ClientAliveInterval 300
+            ClientAliveCountMax 0
+        notify: Restart sshd
+
+      - name: Ensure SSH service is enabled and running
+        ansible.builtin.service:
+          name: sshd
+          state: started
+          enabled: yes
+>>>>>>> 61188f6 (Update files)
+  
+    handlers:
+      - name: Reload sysctl
+        command: sysctl -p
+  
+      - name: Restart sshd
+        service:
+          name: sshd
+          state: restarted
+  
+      - name: Restart postfix
+        service:
+          name: postfix
+          state: restarted
+<<<<<<< HEAD
+  
+=======
+          
+      - name: Restart Apache
+        service:
+          name: httpd
+          state: restarted
+          
+      - name: Restart nftables
+        command: systemctl restart nftables
+
+  
+>>>>>>> 61188f6 (Update files)
