@@ -31,9 +31,6 @@
           opts: nodev,nosuid,noexec,noauto
           state: mounted
         when: ansible_mounts | selectattr('mount', 'equalto', '/var/tmp') | list | length == 0
-<<<<<<< HEAD
-  
-=======
         # Perbaikan: Konfigurasi PHP session agar tidak menggunakan /tmp
       - name: Create PHP session directory
         file:
@@ -50,7 +47,6 @@
           line: 'session.save_path = "/var/lib/php/session"'
         notify: Restart PHP-FPM
 
->>>>>>> 61188f6 (Update files)
       # 1.2 Package Management
       - name: Check if gpgcheck is already enabled
         command: grep -q '^gpgcheck=1' /etc/dnf.conf
@@ -82,10 +78,6 @@
           regexp: '^SELINUX='
           line: 'SELINUX=enforcing'
         when: ansible_facts['selinux']['status'] != "enforcing"
-<<<<<<< HEAD
-
-      # 1.5 Process Hardening
-=======
         
       # 1.3 SELinux - Allow Webmin Uploads
       - name: Allow Webmin to access upload directory
@@ -112,25 +104,12 @@
         ignore_errors: true
         changed_when: false
 
->>>>>>> 61188f6 (Update files)
       - name: Configure sysctl settings for security
         blockinfile:
           path: /etc/sysctl.conf
           block: |
             kernel.randomize_va_space = 2
             kernel.yama.ptrace_scope = 1
-<<<<<<< HEAD
-            net.ipv4.ip_forward = 0
-            net.ipv4.conf.all.accept_redirects = 0
-            net.ipv4.tcp_syncookies = 1
-        notify: Reload sysctl
-  
-      # 2. Services Hardening
-      - name: Gather service facts
-        ansible.builtin.service_facts:
-  
-      - name: Disable unnecessary web services (Apache)
-=======
             net.ipv4.conf.all.accept_redirects = 0
             net.ipv4.tcp_syncookies = 1
         notify: Reload sysctl
@@ -156,14 +135,10 @@
         changed_when: false
 
       - name: Disable Apache (httpd) if Webmin is NOT running
->>>>>>> 61188f6 (Update files)
         ansible.builtin.systemd:
           name: httpd
           state: stopped
           enabled: no
-<<<<<<< HEAD
-        when: "'httpd' in ansible_facts.services"
-=======
         when: webmin_status.rc != 0  # Matikan Apache hanya jika Webmin tidak aktif
 
       - name: Limit Apache access with firewall (nftables)
@@ -172,7 +147,6 @@
             nft add rule inet filter input ip saddr { 192.168.1.100, 192.168.1.101 } tcp dport 80 accept
             nft add rule inet filter input ip saddr 0.0.0.0/0 tcp dport 80 drop
         when: webmin_status.rc == 0  # Terapkan firewall jika Webmin aktif
->>>>>>> 61188f6 (Update files)
   
       - name: Ensure Postfix is installed
         ansible.builtin.package:
@@ -184,8 +158,6 @@
         register: postfix_configured
         failed_when: false
         changed_when: false
-<<<<<<< HEAD
-=======
     
       - name: Configure Postfix for SMTP relay
         blockinfile:
@@ -214,7 +186,6 @@
       - name: Hash the SASL password file
         command: postmap /etc/postfix/sasl_passwd
         notify: Restart Postfix
->>>>>>> 61188f6 (Update files)
   
       - name: Configure MTA for local-only mode
         ansible.builtin.lineinfile:
@@ -233,10 +204,6 @@
           name: nftables
           state: started
           enabled: yes
-<<<<<<< HEAD
-  
-      # 5. SSH Hardening
-=======
           
       - name: Allow outgoing SMTP traffic
         ansible.builtin.command:
@@ -256,7 +223,7 @@
                 ct state established,related accept
                 
                 # Allow SSH
-                tcp dport 22 accept
+                tcp dport 2222 accept
                 
                 # Allow HTTP/HTTPS
                 tcp dport { 80, 443 } accept
@@ -277,28 +244,17 @@
         notify: Restart nftables
   
       # 5. Configure SSH
->>>>>>> 61188f6 (Update files)
       - name: Check if SSH is already configured
         command: grep -q '^PermitRootLogin no' /etc/ssh/sshd_config
         register: ssh_configured
         failed_when: false
         changed_when: false
   
-<<<<<<< HEAD
-      - name: Configure SSH security settings
-=======
       - name: Ensure SSH security settings
->>>>>>> 61188f6 (Update files)
         blockinfile:
           path: /etc/ssh/sshd_config
           block: |
             PermitRootLogin no
-<<<<<<< HEAD
-            ClientAliveInterval 300
-            ClientAliveCountMax 0
-        when: ssh_configured.rc != 0
-        notify: Restart sshd
-=======
             PasswordAuthentication yes
             AllowUsers student1 student2 student3
             ClientAliveInterval 300
@@ -310,7 +266,6 @@
           name: sshd
           state: started
           enabled: yes
->>>>>>> 61188f6 (Update files)
   
     handlers:
       - name: Reload sysctl
@@ -325,9 +280,6 @@
         service:
           name: postfix
           state: restarted
-<<<<<<< HEAD
-  
-=======
           
       - name: Restart Apache
         service:
@@ -338,4 +290,3 @@
         command: systemctl restart nftables
 
   
->>>>>>> 61188f6 (Update files)
